@@ -52,6 +52,63 @@ yes_no(){
 
 safe_name(){ printf '%s' "$1" | sed 's#^.*/##; s/[:@/\\[:space:]]/-/g; s/[^A-Za-z0-9._-]/-/g; s/--*/-/g; s/^[-.]*//; s/[-.]*$//'; }
 
+script_dir(){ CDPATH= cd -- "$(dirname -- "$0")" && pwd; }
+CATALOG_PATH="$(script_dir)/catalog/distributions.tsv"
+
+catalog_count(){ awk 'NR>1 {n++} END {print n+0}' "$CATALOG_PATH"; }
+
+select_catalog_image(){
+    [ -f "$CATALOG_PATH" ] || die "Distribution catalog missing: $CATALOG_PATH"
+    page=0; size=10
+    while :; do
+        total=$(catalog_count); pages=$(((total+size-1)/size)); [ "$pages" -gt 0 ] || pages=1
+        say "Distribution / repository catalog - page $((page+1))/$pages"
+        awk -F '\t' -v s=$((page*size+2)) -v e=$((page*size+size+1)) 'NR>=s&&NR<=e {printf "[%d] %-28s %s\n",NR-1,$2,$5}' "$CATALOG_PATH"
+        choice=$(prompt 'Number, n=next, p=previous, q=back' '')
+        case "$choice" in
+            n|N) [ $((page+1)) -lt "$pages" ] && page=$((page+1));;
+            p|P) [ "$page" -gt 0 ] && page=$((page-1));;
+            q|Q) return 1;;
+            *[!0-9]*|'') warn 'Invalid selection';;
+            *) image=$(awk -F '\t' -v n="$choice" 'NR>1 {i++; if(i==n){print $5; exit}}' "$CATALOG_PATH"); [ -n "$image" ] && { printf '%s\n' "$image"; return 0; }; warn 'Invalid catalog number';;
+        esac
+    done
+}
+
+local_image_lines(){ docker image ls --format '{{.Repository}}:{{.Tag}}|{{.ID}}|{{.Size}}' | awk -F '|' '$1 !~ /<none>/ {print}'; }
+
+select_local_image(){
+    tmp=${TMPDIR:-/tmp}/archimedes-images-$$; local_image_lines > "$tmp"; trap 'rm -f "$tmp"' EXIT INT TERM HUP
+    total=$(wc -l < "$tmp" | tr -d ' '); [ "$total" -gt 0 ] || { rm -f "$tmp"; trap - EXIT INT TERM HUP; return 1; }
+    page=0; size=10; pages=$(((total+size-1)/size))
+    while :; do
+        say "Locally installed Docker images - page $((page+1))/$pages"
+        awk -F '|' -v s=$((page*size+1)) -v e=$((page*size+size)) 'NR>=s&&NR<=e {printf "[%d] %-52s %s\n",NR,$1,$3}' "$tmp"
+        choice=$(prompt 'Number, n=next, p=previous, q=back' '')
+        case "$choice" in
+            n|N) [ $((page+1)) -lt "$pages" ] && page=$((page+1));;
+            p|P) [ "$page" -gt 0 ] && page=$((page-1));;
+            q|Q) rm -f "$tmp"; trap - EXIT INT TERM HUP; return 1;;
+            *[!0-9]*|'') warn 'Invalid selection';;
+            *) ref=$(awk -F '|' -v n="$choice" 'NR==n {print $1; exit}' "$tmp"); if [ -n "$ref" ]; then rm -f "$tmp"; trap - EXIT INT TERM HUP; printf '%s\n' "$ref"; return 0; fi; warn 'Invalid image number';;
+        esac
+    done
+}
+
+select_interactive_source(){
+    while :; do
+        say 'Source'; say '  [1] Distribution / repository catalog'; say '  [2] Locally installed Docker images'; say '  [3] Custom Docker image reference'; say '  [4] Build from Dockerfile'; say '  [5] Exit'
+        case "$(prompt 'Select' '1')" in
+            1) SOURCE_MODE=pull; IMAGE=$(select_catalog_image) || continue; return 0;;
+            2) SOURCE_MODE=local; IMAGE=$(select_local_image) || continue; return 0;;
+            3) SOURCE_MODE=pull; IMAGE=$(prompt 'Docker image reference' ''); [ -n "$IMAGE" ] && return 0;;
+            4) SOURCE_MODE=build; IMAGE=$(prompt 'Image tag' 'archimedes/custom:latest'); return 0;;
+            5) exit 0;;
+            *) warn 'Invalid source selection';;
+        esac
+    done
+}
+
 ensure_output(){
     path=$1
     if [ -e "$path" ] && [ "${FORCE:-0}" -ne 1 ]; then
@@ -127,23 +184,15 @@ docker version >/dev/null 2>&1 || die 'Docker daemon is not reachable.'
 
 if [ -z "$SOURCE_MODE" ]; then
     [ "$NON_INTERACTIVE" -eq 0 ] || die '--source is required with --non-interactive'
-    say 'How should the Docker image be obtained?'; say '  [1] Pull from registry'; say '  [2] Use local image'; say '  [3] Build from Dockerfile'
-    case "$(prompt 'Select' '1')" in 1) SOURCE_MODE=pull;; 2) SOURCE_MODE=local;; 3) SOURCE_MODE=build;; *) die 'Invalid source selection';; esac
+    select_interactive_source
 fi
 
 case "$SOURCE_MODE" in
     pull)
-        if [ -z "$IMAGE" ]; then
-            [ "$NON_INTERACTIVE" -eq 0 ] || die '--image is required for source=pull'
-            say 'Presets: [1] debian:13 [2] ubuntu:24.04 [3] ubuntu:26.04 [4] fedora:44 [5] alpine:3.22 [6] archlinux:latest [7] Rocky 10 [8] Alma 10 [9] Kali [10] openSUSE Tumbleweed [11] custom'
-            case "$(prompt 'Select image' '1')" in
-                1) IMAGE='debian:13';; 2) IMAGE='ubuntu:24.04';; 3) IMAGE='ubuntu:26.04';; 4) IMAGE='fedora:44';; 5) IMAGE='alpine:3.22';; 6) IMAGE='archlinux:latest';;
-                7) IMAGE='rockylinux/rockylinux:10';; 8) IMAGE='almalinux:10';; 9) IMAGE='kalilinux/kali-rolling:latest';; 10) IMAGE='opensuse/tumbleweed:latest';; 11) IMAGE=$(prompt 'Docker image reference' '');; *) die 'Invalid image selection';;
-            esac
-        fi
+        if [ -z "$IMAGE" ]; then [ "$NON_INTERACTIVE" -eq 0 ] || die '--image is required for source=pull'; IMAGE=$(select_catalog_image) || die 'No catalog image selected'; fi
         docker pull "$IMAGE";;
     local)
-        [ -n "$IMAGE" ] || { [ "$NON_INTERACTIVE" -eq 0 ] && IMAGE=$(prompt 'Local Docker image reference' '') || die '--image is required'; }
+        [ -n "$IMAGE" ] || { [ "$NON_INTERACTIVE" -eq 0 ] && IMAGE=$(select_local_image) || die '--image is required'; }
         docker image inspect "$IMAGE" >/dev/null;;
     build)
         [ -n "$IMAGE" ] || { [ "$NON_INTERACTIVE" -eq 0 ] && IMAGE=$(prompt 'Tag for the new Docker image' 'archimedes/custom:latest') || die '--image is required'; }
@@ -157,17 +206,26 @@ esac
 if [ -z "$EXPORT_DIR" ]; then default_dir=$(pwd)/exports; if [ "$NON_INTERACTIVE" -eq 1 ]; then EXPORT_DIR=$default_dir; else EXPORT_DIR=$(prompt 'Export directory' "$default_dir"); fi; fi
 mkdir -p "$EXPORT_DIR"; EXPORT_DIR=$(cd "$EXPORT_DIR" && pwd)
 
+needs_image=0; needs_rootfs=0; needs_wsl_export=0; keep_rootfs=0
 if [ -z "$EXPORT_MODE" ]; then
     [ "$NON_INTERACTIVE" -eq 0 ] || die '--export is required with --non-interactive'
-    say 'Export: [1] Docker image tar [2] RootFS tar [3] both'; has_windows_wsl && say '        [4] WSL2 tar [5] all formats'
-    case "$(prompt 'Select' '3')" in 1) EXPORT_MODE=image;; 2) EXPORT_MODE=rootfs;; 3) EXPORT_MODE=both;; 4) has_windows_wsl || die 'WSL unavailable'; EXPORT_MODE=wsl;; 5) has_windows_wsl || die 'WSL unavailable'; EXPORT_MODE=all;; *) die 'Invalid export selection';; esac
-fi
-
-needs_image=0; needs_rootfs=0; needs_wsl_export=0
-case "$EXPORT_MODE" in image) needs_image=1;; rootfs) needs_rootfs=1;; both) needs_image=1; needs_rootfs=1;; wsl) has_windows_wsl || die 'WSL unavailable'; needs_rootfs=1; needs_wsl_export=1; IMPORT_WSL=1;; all) has_windows_wsl || die 'WSL unavailable'; needs_image=1; needs_rootfs=1; needs_wsl_export=1; IMPORT_WSL=1;; *) die "Invalid export mode: $EXPORT_MODE";; esac
-
-if [ "$IMPORT_WSL" -eq 1 ]; then has_windows_wsl || die '--import-wsl is Windows/WSL only'; needs_rootfs=1
-elif has_windows_wsl && [ "$NON_INTERACTIVE" -eq 0 ] && [ "$needs_wsl_export" -eq 0 ]; then yes_no 'Import RootFS into WSL2 afterwards?' n && { IMPORT_WSL=1; needs_rootfs=1; }
+    yes_no 'Export Docker image archive?' y && needs_image=1
+    yes_no 'Keep RootFS TAR?' y && { needs_rootfs=1; keep_rootfs=1; }
+    if has_windows_wsl; then
+        if yes_no 'Import RootFS into WSL2?' n; then IMPORT_WSL=1; needs_rootfs=1; fi
+        if [ "$IMPORT_WSL" -eq 1 ] && yes_no 'Export imported WSL2 distribution TAR?' n; then needs_wsl_export=1; fi
+    fi
+    [ "$needs_image" -eq 1 ] || [ "$needs_rootfs" -eq 1 ] || [ "$IMPORT_WSL" -eq 1 ] || die 'No export/import action selected.'
+else
+    case "$EXPORT_MODE" in
+        image) needs_image=1;;
+        rootfs) needs_rootfs=1; keep_rootfs=1;;
+        both) needs_image=1; needs_rootfs=1; keep_rootfs=1;;
+        wsl) has_windows_wsl || die 'WSL unavailable'; needs_rootfs=1; keep_rootfs=1; needs_wsl_export=1; IMPORT_WSL=1;;
+        all) has_windows_wsl || die 'WSL unavailable'; needs_image=1; needs_rootfs=1; keep_rootfs=1; needs_wsl_export=1; IMPORT_WSL=1;;
+        *) die "Invalid export mode: $EXPORT_MODE";;
+    esac
+    if [ "$IMPORT_WSL" -eq 1 ]; then has_windows_wsl || die '--import-wsl is Windows/WSL only'; needs_rootfs=1; fi
 fi
 
 image_tar="$EXPORT_DIR/$DIST_NAME-docker-image.tar"; rootfs_tar="$EXPORT_DIR/$DIST_NAME-rootfs.tar"; wsl_tar="$EXPORT_DIR/$DIST_NAME-wsl.tar"
@@ -175,17 +233,23 @@ image_tar="$EXPORT_DIR/$DIST_NAME-docker-image.tar"; rootfs_tar="$EXPORT_DIR/$DI
 [ "$needs_rootfs" -eq 0 ] || new_rootfs_tar "$IMAGE" "$rootfs_tar"
 
 if [ "$IMPORT_WSL" -eq 1 ]; then
+    platform=$(docker image inspect --format '{{.Os}}|{{.Architecture}}' "$IMAGE") || die 'Unable to inspect image platform for WSL import.'
+    image_os=${platform%%|*}; image_arch=${platform#*|}
+    [ "$image_os" = linux ] || die "WSL import blocked: image OS is $image_os, not linux."
+    host_arch=$(docker info --format '{{.Architecture}}' 2>/dev/null || true)
+    [ -z "$host_arch" ] || [ "$image_arch" = "$host_arch" ] || die "WSL import blocked: image architecture $image_arch does not match Docker host $host_arch."
     requested_wsl_name=${WSL_DIST_NAME:-$DIST_NAME}
     WSL_DIST_NAME=$(safe_name "$requested_wsl_name")
     [ -n "$WSL_DIST_NAME" ] || WSL_DIST_NAME='Archimedes-WSL'
     [ "$WSL_DIST_NAME" = "$requested_wsl_name" ] || say "Resolved WSL distribution name: $requested_wsl_name -> $WSL_DIST_NAME"
     [ -n "$WSL_INSTALL_DIR" ] || { default_install="$EXPORT_DIR/wsl/$WSL_DIST_NAME"; if [ "$NON_INTERACTIVE" -eq 1 ]; then WSL_INSTALL_DIR=$default_install; else WSL_INSTALL_DIR=$(prompt 'WSL2 install directory' "$default_install"); fi; }
     import_wsl "$WSL_DIST_NAME" "$rootfs_tar" "$WSL_INSTALL_DIR"
+    [ "$keep_rootfs" -eq 1 ] || rm -f "$rootfs_tar"
 fi
 [ "$needs_wsl_export" -eq 0 ] || export_wsl "$WSL_DIST_NAME" "$wsl_tar"
 
 say 'Completed.'
 [ "$needs_image" -eq 0 ] || say "Docker image: $image_tar"
-[ "$needs_rootfs" -eq 0 ] || say "RootFS:       $rootfs_tar"
+[ "$keep_rootfs" -eq 0 ] || say "RootFS:       $rootfs_tar"
 [ "$needs_wsl_export" -eq 0 ] || say "WSL2 export:  $wsl_tar"
 [ "$IMPORT_WSL" -eq 0 ] || say "WSL2 name:    $WSL_DIST_NAME"
