@@ -33,6 +33,8 @@ On Windows, the PowerShell frontend checks the Docker daemon with `docker info`.
 
 No automatic `wsl --unregister`, destructive cleanup, or replacement of an existing WSL distribution is performed.
 
+WSL registration names are sanitized separately from display/artifact names. For example, `-DistributionName 'Kali Linux'` keeps readable archive names while WSL is registered as `Kali-Linux`. PowerShell can override this with `-WSLDistributionName`; the POSIX frontend provides `--wsl-name`.
+
 ## Quick start
 
 ### PowerShell

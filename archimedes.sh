@@ -97,6 +97,7 @@ Usage: ./archimedes.sh [options]
   --export image|rootfs|both|wsl|all
   --output PATH
   --name NAME
+  --wsl-name NAME
   --wsl-install PATH
   --import-wsl
   --force
@@ -112,11 +113,11 @@ Export types:
 EOF
 }
 
-SOURCE_MODE=''; IMAGE=''; BUILD_CONTEXT='.'; DOCKERFILE=''; EXPORT_MODE=''; EXPORT_DIR=''; DIST_NAME=''; WSL_INSTALL_DIR=''; IMPORT_WSL=0; FORCE=0; NON_INTERACTIVE=0
+SOURCE_MODE=''; IMAGE=''; BUILD_CONTEXT='.'; DOCKERFILE=''; EXPORT_MODE=''; EXPORT_DIR=''; DIST_NAME=''; WSL_DIST_NAME=''; WSL_INSTALL_DIR=''; IMPORT_WSL=0; FORCE=0; NON_INTERACTIVE=0
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --source) SOURCE_MODE=$2; shift 2;; --image) IMAGE=$2; shift 2;; --context) BUILD_CONTEXT=$2; shift 2;; --dockerfile) DOCKERFILE=$2; shift 2;;
-        --export) EXPORT_MODE=$2; shift 2;; --output) EXPORT_DIR=$2; shift 2;; --name) DIST_NAME=$2; shift 2;; --wsl-install) WSL_INSTALL_DIR=$2; shift 2;;
+        --export) EXPORT_MODE=$2; shift 2;; --output) EXPORT_DIR=$2; shift 2;; --name) DIST_NAME=$2; shift 2;; --wsl-name) WSL_DIST_NAME=$2; shift 2;; --wsl-install) WSL_INSTALL_DIR=$2; shift 2;;
         --import-wsl) IMPORT_WSL=1; shift;; --force) FORCE=1; shift;; --non-interactive) NON_INTERACTIVE=1; shift;; -h|--help) usage; exit 0;; *) die "Unknown option: $1";;
     esac
 done
@@ -174,12 +175,17 @@ image_tar="$EXPORT_DIR/$DIST_NAME-docker-image.tar"; rootfs_tar="$EXPORT_DIR/$DI
 [ "$needs_rootfs" -eq 0 ] || new_rootfs_tar "$IMAGE" "$rootfs_tar"
 
 if [ "$IMPORT_WSL" -eq 1 ]; then
-    [ -n "$WSL_INSTALL_DIR" ] || { default_install="$EXPORT_DIR/wsl/$DIST_NAME"; if [ "$NON_INTERACTIVE" -eq 1 ]; then WSL_INSTALL_DIR=$default_install; else WSL_INSTALL_DIR=$(prompt 'WSL2 install directory' "$default_install"); fi; }
-    import_wsl "$DIST_NAME" "$rootfs_tar" "$WSL_INSTALL_DIR"
+    requested_wsl_name=${WSL_DIST_NAME:-$DIST_NAME}
+    WSL_DIST_NAME=$(safe_name "$requested_wsl_name")
+    [ -n "$WSL_DIST_NAME" ] || WSL_DIST_NAME='Archimedes-WSL'
+    [ "$WSL_DIST_NAME" = "$requested_wsl_name" ] || say "Resolved WSL distribution name: $requested_wsl_name -> $WSL_DIST_NAME"
+    [ -n "$WSL_INSTALL_DIR" ] || { default_install="$EXPORT_DIR/wsl/$WSL_DIST_NAME"; if [ "$NON_INTERACTIVE" -eq 1 ]; then WSL_INSTALL_DIR=$default_install; else WSL_INSTALL_DIR=$(prompt 'WSL2 install directory' "$default_install"); fi; }
+    import_wsl "$WSL_DIST_NAME" "$rootfs_tar" "$WSL_INSTALL_DIR"
 fi
-[ "$needs_wsl_export" -eq 0 ] || export_wsl "$DIST_NAME" "$wsl_tar"
+[ "$needs_wsl_export" -eq 0 ] || export_wsl "$WSL_DIST_NAME" "$wsl_tar"
 
 say 'Completed.'
 [ "$needs_image" -eq 0 ] || say "Docker image: $image_tar"
 [ "$needs_rootfs" -eq 0 ] || say "RootFS:       $rootfs_tar"
 [ "$needs_wsl_export" -eq 0 ] || say "WSL2 export:  $wsl_tar"
+[ "$IMPORT_WSL" -eq 0 ] || say "WSL2 name:    $WSL_DIST_NAME"

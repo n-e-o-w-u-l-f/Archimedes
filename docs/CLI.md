@@ -29,7 +29,8 @@ Use `-NoAutoStartDocker` when Archimedes must never start Docker Desktop automat
 -Dockerfile <path>
 -ExportMode image|rootfs|both|wsl|all
 -ExportDirectory <path>
--DistributionName <name>
+-DistributionName <display/artifact name>
+-WSLDistributionName <WSL-safe internal name; optional>
 -WSLInstallDirectory <path>
 -ImportToWSL
 -Force
@@ -61,6 +62,7 @@ If Docker Desktop is stopped, Archimedes starts it automatically before pulling 
 --export image|rootfs|both|wsl|all
 --output PATH
 --name NAME
+--wsl-name NAME
 --wsl-install PATH
 --import-wsl
 --force
@@ -68,3 +70,6 @@ If Docker Desktop is stopped, Archimedes starts it automatically before pulling 
 ```
 
 For a name such as `Debian-13`, possible output files are `Debian-13-docker-image.tar`, `Debian-13-rootfs.tar`, and `Debian-13-wsl.tar`.
+
+
+WSL registration names are separate from human-friendly display/artifact names. `Kali Linux` is automatically registered as `Kali-Linux` unless an explicit WSL name is supplied.

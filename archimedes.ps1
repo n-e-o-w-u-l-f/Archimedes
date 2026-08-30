@@ -9,6 +9,7 @@ param(
     [string]$ExportMode,
     [string]$ExportDirectory,
     [string]$DistributionName,
+    [string]$WSLDistributionName,
     [string]$WSLInstallDirectory,
     [switch]$ImportToWSL,
     [switch]$Force,
@@ -219,6 +220,17 @@ function ConvertTo-SafeName {
     $name = $name -replace '-+', '-'
     $name = $name.Trim('-','.')
     if (-not $name) { return 'archimedes-export' }
+    return $name
+}
+
+function ConvertTo-WSLDistributionName {
+    param([Parameter(Mandatory)][string]$Value)
+    $name = $Value.Trim()
+    $name = $name -replace '\s+', '-'
+    $name = $name -replace '[^A-Za-z0-9._-]', '-'
+    $name = $name -replace '-+', '-'
+    $name = $name.Trim('-','_','.')
+    if (-not $name) { return 'Archimedes-WSL' }
     return $name
 }
 
@@ -458,8 +470,13 @@ if ($needsRootFs) { New-RootFsTar -ImageRef $Image -OutputPath $rootFsTar }
 $mustImport = $ImportToWSL -or $needsWSLExport
 if ($mustImport) {
     Require-Command 'wsl.exe'
+    $requestedWSLName = if ($WSLDistributionName) { $WSLDistributionName } else { $DistributionName }
+    $WSLDistributionName = ConvertTo-WSLDistributionName $requestedWSLName
+    if ($WSLDistributionName -ne $requestedWSLName) {
+        Write-Host "Resolved WSL distribution name: $requestedWSLName -> $WSLDistributionName"
+    }
     if (-not $WSLInstallDirectory) {
-        $defaultInstall = Join-Path (Join-Path $ExportDirectory 'wsl') $DistributionName
+        $defaultInstall = Join-Path (Join-Path $ExportDirectory 'wsl') $WSLDistributionName
         if ($NonInteractive) {
             $WSLInstallDirectory = $defaultInstall
         } else {
@@ -468,9 +485,9 @@ if ($mustImport) {
         }
     }
     $WSLInstallDirectory = [System.IO.Path]::GetFullPath($WSLInstallDirectory)
-    Import-RootFsToWSL -Name $DistributionName -RootFsTar $rootFsTar -InstallDirectory $WSLInstallDirectory
+    Import-RootFsToWSL -Name $WSLDistributionName -RootFsTar $rootFsTar -InstallDirectory $WSLInstallDirectory
     if ($needsWSLExport) {
-        Export-WSLDistribution -Name $DistributionName -OutputPath $wslTar
+        Export-WSLDistribution -Name $WSLDistributionName -OutputPath $wslTar
     }
 }
 
@@ -478,4 +495,4 @@ Write-Section 'Completed'
 if ($needsImageTar) { Write-Host "Docker image: $imageTar" }
 if ($needsRootFs) { Write-Host "RootFS:       $rootFsTar" }
 if ($needsWSLExport) { Write-Host "WSL2 export:  $wslTar" }
-if ($mustImport) { Write-Host "WSL2 name:    $DistributionName" }
+if ($mustImport) { Write-Host "WSL2 name:    $WSLDistributionName" }
