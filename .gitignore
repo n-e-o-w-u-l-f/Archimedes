@@ -1,0 +1,21 @@
+# Generated exports
+exports/
+*.tar
+*.tar.gz
+*.tgz
+
+# Local state
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+
+# Internal/private workflow material must never be published
+.agents/
+AGENTS.md
+*HANDOFF*.md
+*INTERNAL*.md
+*PRIVATE*.md
+.internal/
