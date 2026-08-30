@@ -29,6 +29,8 @@ The POSIX and Fish versions can optionally call `wsl.exe` when they are running 
 - For WSL2 import/export: Windows with WSL2 and `wsl.exe`
 - For Dockerfile builds: a valid Docker build context
 
+On Windows, the PowerShell frontend checks the Docker daemon with `docker info`. If Docker Desktop is installed but stopped, Archimedes attempts to start it automatically and waits for the engine before continuing. Use `-NoAutoStartDocker` to disable this behavior or `-DockerStartupTimeoutSeconds` to change the default 120-second wait.
+
 No automatic `wsl --unregister`, destructive cleanup, or replacement of an existing WSL distribution is performed.
 
 ## Quick start
@@ -60,6 +62,19 @@ Docker RootFS plus WSL2 import:
   -DistributionName Ubuntu-26.04 `
   -ImportToWSL
 ```
+
+A user-defined display name may contain spaces:
+
+```powershell
+archimedes `
+  -SourceMode pull `
+  -Image debian:13 `
+  -ExportMode both `
+  -ExportDirectory 'B:\WSL2\' `
+  -DistributionName 'Debian v13.6'
+```
+
+When Docker Desktop is stopped, Archimedes starts it before the pull. Without `-NonInteractive`, Windows then asks whether the RootFS should also be imported into WSL2.
 
 ### Bash / POSIX shell
 
