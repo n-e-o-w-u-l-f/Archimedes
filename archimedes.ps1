@@ -45,14 +45,28 @@ function Assert-ExitCode {
 }
 
 function Test-DockerDaemon {
-    & docker info *> $null
-    return ($LASTEXITCODE -eq 0)
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & docker info *> $null
+        return ($LASTEXITCODE -eq 0)
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
 }
 
 function Get-DockerContextName {
-    $context = & docker context show 2>$null
-    if ($LASTEXITCODE -eq 0 -and $context) {
-        return (($context | Select-Object -Last 1).ToString().Trim())
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $context = & docker context show 2>$null
+        if ($LASTEXITCODE -eq 0 -and $context) {
+            return (($context | Select-Object -Last 1).ToString().Trim())
+        }
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
     }
     return '<unknown>'
 }
@@ -75,14 +89,29 @@ function Start-DockerDesktopIfAvailable {
     if (-not $script:IsWindows) { return $false }
 
     $desktopCliAvailable = $false
-    & docker desktop version *> $null
-    if ($LASTEXITCODE -eq 0) { $desktopCliAvailable = $true }
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & docker desktop version *> $null
+        $desktopCliAvailable = ($LASTEXITCODE -eq 0)
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
 
     if ($desktopCliAvailable) {
         Write-Host 'Docker daemon is not reachable. Starting Docker Desktop...'
-        & docker desktop start --timeout $TimeoutSeconds
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warning "docker desktop start returned exit code $LASTEXITCODE; waiting for the daemon anyway."
+        $startExitCode = 0
+        try {
+            $ErrorActionPreference = 'Continue'
+            & docker desktop start --timeout $TimeoutSeconds
+            $startExitCode = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
+        if ($startExitCode -ne 0) {
+            Write-Warning "docker desktop start returned exit code $startExitCode; waiting for the daemon anyway."
         }
         return (Wait-DockerDaemon -TimeoutSeconds $TimeoutSeconds)
     }
@@ -103,6 +132,17 @@ function Start-DockerDesktopIfAvailable {
     return $false
 }
 
+function Get-DockerDaemonDiagnostic {
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        return ((& docker info 2>&1 | Out-String).Trim())
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+}
+
 function Ensure-DockerDaemon {
     if (Test-DockerDaemon) { return }
 
@@ -115,7 +155,7 @@ function Ensure-DockerDaemon {
         }
     }
 
-    $details = (& docker info 2>&1 | Out-String).Trim()
+    $details = Get-DockerDaemonDiagnostic
     $hint = if ($script:IsWindows) {
         if ($NoAutoStartDocker) {
             'Automatic Docker Desktop startup is disabled by -NoAutoStartDocker. Start Docker Desktop or another Docker Engine and retry.'
