@@ -12,7 +12,10 @@ param(
     [string]$WSLInstallDirectory,
     [switch]$ImportToWSL,
     [switch]$Force,
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+    [switch]$NoAutoStartDocker,
+    [ValidateRange(5,600)]
+    [int]$DockerStartupTimeoutSeconds = 120
 )
 
 Set-StrictMode -Version Latest
@@ -39,6 +42,93 @@ function Require-Command {
 function Assert-ExitCode {
     param([Parameter(Mandatory)][string]$Operation)
     if ($LASTEXITCODE -ne 0) { throw "$Operation failed with exit code $LASTEXITCODE" }
+}
+
+function Test-DockerDaemon {
+    & docker info *> $null
+    return ($LASTEXITCODE -eq 0)
+}
+
+function Get-DockerContextName {
+    $context = & docker context show 2>$null
+    if ($LASTEXITCODE -eq 0 -and $context) {
+        return (($context | Select-Object -Last 1).ToString().Trim())
+    }
+    return '<unknown>'
+}
+
+function Wait-DockerDaemon {
+    param([Parameter(Mandatory)][int]$TimeoutSeconds)
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    do {
+        if (Test-DockerDaemon) { return $true }
+        Start-Sleep -Seconds 2
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    return $false
+}
+
+function Start-DockerDesktopIfAvailable {
+    param([Parameter(Mandatory)][int]$TimeoutSeconds)
+
+    if (-not $script:IsWindows) { return $false }
+
+    $desktopCliAvailable = $false
+    & docker desktop version *> $null
+    if ($LASTEXITCODE -eq 0) { $desktopCliAvailable = $true }
+
+    if ($desktopCliAvailable) {
+        Write-Host 'Docker daemon is not reachable. Starting Docker Desktop...'
+        & docker desktop start --timeout $TimeoutSeconds
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "docker desktop start returned exit code $LASTEXITCODE; waiting for the daemon anyway."
+        }
+        return (Wait-DockerDaemon -TimeoutSeconds $TimeoutSeconds)
+    }
+
+    $candidates = @(
+        (Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Docker\Docker Desktop.exe')
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            Write-Host "Docker daemon is not reachable. Starting Docker Desktop: $candidate"
+            Start-Process -FilePath $candidate | Out-Null
+            return (Wait-DockerDaemon -TimeoutSeconds $TimeoutSeconds)
+        }
+    }
+
+    return $false
+}
+
+function Ensure-DockerDaemon {
+    if (Test-DockerDaemon) { return }
+
+    $context = Get-DockerContextName
+
+    if ($script:IsWindows -and -not $NoAutoStartDocker) {
+        if (Start-DockerDesktopIfAvailable -TimeoutSeconds $DockerStartupTimeoutSeconds) {
+            Write-Host "Docker daemon is ready (context: $(Get-DockerContextName))."
+            return
+        }
+    }
+
+    $details = (& docker info 2>&1 | Out-String).Trim()
+    $hint = if ($script:IsWindows) {
+        if ($NoAutoStartDocker) {
+            'Automatic Docker Desktop startup is disabled by -NoAutoStartDocker. Start Docker Desktop or another Docker Engine and retry.'
+        }
+        else {
+            'Start Docker Desktop (or another Docker Engine) and retry. If Docker Desktop is installed, `docker desktop start` can also be used manually.'
+        }
+    }
+    else {
+        'Start the Docker daemon for the active context and retry.'
+    }
+
+    throw "Docker CLI is installed, but no Docker daemon is reachable (context: $context). $hint`n$details"
 }
 
 function Read-Choice {
@@ -170,8 +260,7 @@ function Get-PresetImage {
 $script:IsWindows=Test-IsWindows
 Write-Host 'Archimedes - Docker image and RootFS export utility'
 Require-Command 'docker'
-& docker version | Out-Null
-Assert-ExitCode 'docker version'
+Ensure-DockerDaemon
 
 if(-not $SourceMode){
     if($NonInteractive){throw '-SourceMode is required with -NonInteractive.'}
