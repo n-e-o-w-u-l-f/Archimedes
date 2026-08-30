@@ -1,5 +1,28 @@
 # CLI Reference
 
+## Interactive workflow
+
+With no explicit source parameters, PowerShell opens the ANSI TUI. The source screen offers:
+
+1. Distribution / repository catalog
+2. Locally installed Docker images
+3. Custom Docker image reference
+4. Build from Dockerfile
+5. Exit
+
+Catalog and local-image screens support multi-select. The PowerShell TUI uses two columns with `Up/Down/Left/Right`, `PageUp/PageDown`, `Home/End`, `Space`, `Enter`, `Esc`, `A`, `N`, and `/` filtering. The active cell uses cyan background/black text; full-width header, navigation and footer bars use a blue ANSI background.
+
+After source selection, Windows users choose a filesystem drive and output directory. This selects artifact/WSL paths only and never relocates Docker's global data store.
+
+The action screen independently controls:
+
+- Docker image archive (`docker save`)
+- keeping a RootFS TAR (`docker export`)
+- WSL2 import
+- exporting the imported WSL2 distribution (`wsl --export`)
+
+WSL import requires a RootFS, but the RootFS may be temporary when the user does not choose to keep it. Explicit `-ExportMode`/`--export` values retain their legacy mappings for automation.
+
 ## Source modes
 - `pull`: pull from a Docker-compatible registry.
 - `local`: use an image already present locally.
@@ -73,3 +96,7 @@ For a name such as `Debian-13`, possible output files are `Debian-13-docker-imag
 
 
 WSL registration names are separate from human-friendly display/artifact names. `Kali Linux` is automatically registered as `Kali-Linux` unless an explicit WSL name is supplied.
+
+## Package layout
+
+`archimedes.ps1` loads helpers relative to its own directory. Deploy `archimedes.ps1`, `lib/`, and `catalog/` together. `archimedes.cmd` already launches the adjacent PowerShell script.

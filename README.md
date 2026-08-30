@@ -1,6 +1,6 @@
 # Archimedes
 
-Archimedes is an interactive, cross-platform CLI toolkit for turning Docker images into portable `.tar` artifacts and, on Windows, optional WSL2 distributions.
+Archimedes is an interactive, cross-platform CLI toolkit for selecting Docker/Linux repositories or locally installed Docker images, turning them into portable `.tar` artifacts and, on Windows, optional WSL2 distributions.
 
 It can pull an image from a registry, reuse a local image, or build one from a Dockerfile. The CLI then asks which export format you want, where the files should be written, and whether a generated RootFS should be imported into WSL2 when WSL is available.
 
@@ -34,6 +34,45 @@ On Windows, the PowerShell frontend checks the Docker daemon with `docker info`.
 No automatic `wsl --unregister`, destructive cleanup, or replacement of an existing WSL distribution is performed.
 
 WSL registration names are sanitized separately from display/artifact names. For example, `-DistributionName 'Kali Linux'` keeps readable archive names while WSL is registered as `Kali-Linux`. PowerShell can override this with `-WSLDistributionName`; the POSIX frontend provides `--wsl-name`.
+
+## Interactive TUI
+
+Running `archimedes` without explicit source parameters opens the interactive workflow:
+
+```text
+Source -> Catalog / local Docker images / custom / build
+       -> Select one or more images
+       -> Choose export drive/directory
+       -> Choose Docker TAR / RootFS / WSL2 actions
+       -> Execute queue
+       -> Summary
+```
+
+The PowerShell frontend uses the Archimedes ANSI TUI: blue full-width header/navigation/footer bars, a normal terminal background for the list, and a cyan/black active cell. Repository and local-image lists use two columns and never place the cursor on an empty cell.
+
+Keys: `Up`, `Down`, `Left`, `Right`, `PageUp`, `PageDown`, `Home`, `End`, `Space`, `Enter`, `Esc`, `A`, `N`, and `/` for filtering. Cursor movement is rendered in place; Archimedes does not clear the whole terminal for every keypress. A numbered pager is used when raw console input is unavailable.
+
+The POSIX and Fish frontends provide a dependency-free paginated equivalent rather than requiring a third-party TUI framework.
+
+## Installation layout
+
+The PowerShell frontend is now a small package rather than a standalone script. Keep these paths together:
+
+```text
+Archimedes/
+├── archimedes.ps1
+├── archimedes.cmd
+├── lib/
+│   ├── Archimedes.Console.ps1
+│   ├── Archimedes.Catalog.ps1
+│   ├── Archimedes.Docker.ps1
+│   ├── Archimedes.Storage.ps1
+│   └── Archimedes.Workflow.ps1
+└── catalog/
+    └── distributions.tsv
+```
+
+If `archimedes` is exposed through a PowerShell profile function/alias, point that wrapper at `Archimedes\archimedes.ps1`; do not copy only `archimedes.ps1` away from its `lib/` and `catalog/` directories.
 
 ## Quick start
 
@@ -104,7 +143,11 @@ The Fish frontend is intentionally interactive in the initial release.
 
 ## Image sources
 
-The interactive frontends include a small set of common Linux image presets. Any Docker-compatible image reference can also be entered manually. The preset list is documented in [`catalog/distributions.tsv`](catalog/distributions.tsv).
+The interactive frontends load their Linux repository choices from [`catalog/distributions.tsv`](catalog/distributions.tsv) instead of a hardcoded preset switch. The catalog includes the currently verified OpenWrt 24.10.8 Docker RootFS tags as architecture-specific entries. Any Docker-compatible image reference can also be entered manually.
+
+Locally installed Docker images can be browsed directly. Archimedes inspects Docker OS/architecture metadata and, when useful, `/etc/os-release` from a temporary stopped container. Windows images are blocked from WSL import; architecture mismatches are surfaced instead of being silently treated as runnable.
+
+Choosing another export drive changes artifact and WSL install paths only. It does not relocate Docker Desktop's global image store; the PowerShell TUI shows Docker's reported data root separately.
 
 Archimedes does not pretend that every operating system is a Docker/WSL target. BSD, Solaris/illumos, DOS, macOS, OS/2 and other VM-oriented systems require different runners and are outside the Docker-to-WSL path.
 
