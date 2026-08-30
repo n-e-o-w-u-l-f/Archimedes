@@ -1,11 +1,26 @@
-Name	Image	Category	Notes
-Debian 13	debian:13	stable	Docker Official Image
-Ubuntu 24.04 LTS	ubuntu:24.04	stable	Docker Official Image
-Ubuntu 26.04 LTS	ubuntu:26.04	stable	Docker Official Image
-Fedora 44	fedora:44	stable	Fedora container image
-Alpine 3.22	alpine:3.22	stable	Docker Official Image
-Arch Linux	archlinux:latest	rolling	Arch Linux image
-Rocky Linux 10	rockylinux/rockylinux:10	stable	Rocky Linux project image
-AlmaLinux 10	almalinux:10	stable	Docker Official Image
-Kali Rolling	kalilinux/kali-rolling:latest	rolling	Kali project image
-openSUSE Tumbleweed	opensuse/tumbleweed:latest	rolling	openSUSE project image
+Id	DisplayName	Family	Version	Image	Aliases	Registry	OS	Architectures	Status	Rolling	Official	WslEligibility	Notes
+debian-13	Debian 13	debian	13	debian:13	debian13;debian-13;debian v13	docker.io	linux	amd64;arm64	stable	false	true	yes	Docker Official Image
+ubuntu-24.04	Ubuntu 24.04 LTS	ubuntu	24.04	ubuntu:24.04	ubuntu24.04;ubuntu-24.04;ubuntu v24.04	docker.io	linux	amd64;arm64	stable	false	true	yes	Docker Official Image
+ubuntu-26.04	Ubuntu 26.04 LTS	ubuntu	26.04	ubuntu:26.04	ubuntu26.04;ubuntu-26.04;ubuntu v26.04	docker.io	linux	amd64;arm64	stable	false	true	yes	Docker Official Image
+fedora-44	Fedora 44	fedora	44	fedora:44	fedora44;fedora-44	docker.io	linux	amd64;arm64	stable	false	true	yes	Fedora image
+alpine-3.22	Alpine 3.22	alpine	3.22	alpine:3.22	alpine3.22;alpine-3.22	docker.io	linux	amd64;arm64	stable	false	true	yes	Docker Official Image
+archlinux	Arch Linux	archlinux	rolling	archlinux:latest	arch;archlinux	docker.io	linux	amd64	rolling	true	true	yes	Arch Linux image
+rocky-10	Rocky Linux 10	rocky	10	rockylinux/rockylinux:10	rocky10;rockylinux10	docker.io	linux	amd64;arm64	stable	false	true	yes	Rocky Linux project image
+alma-10	AlmaLinux 10	alma	10	almalinux:10	alma10;almalinux10	docker.io	linux	amd64;arm64	stable	false	true	yes	AlmaLinux image
+kali-rolling	Kali Linux Rolling	kali	rolling	kalilinux/kali-rolling:latest	kali;kali linux;kalirolling;kali-rolling	docker.io	linux	amd64;arm64	rolling	true	true	yes	Kali project image
+opensuse-tumbleweed	openSUSE Tumbleweed	opensuse	rolling	opensuse/tumbleweed:latest	tumbleweed;opensuse-tumbleweed	docker.io	linux	amd64;arm64	rolling	true	true	yes	openSUSE image
+openwrt-aarch64-generic	OpenWrt 24.10.8 aarch64_generic	openwrt	24.10.8	openwrt/rootfs:aarch64_generic-24.10.8	openwrt aarch64 generic;openwrt-aarch64-generic	docker.io	linux	arm64	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-arm-a15	OpenWrt 24.10.8 arm_cortex-a15_neon-vfpv4	openwrt	24.10.8	openwrt/rootfs:arm_cortex-a15_neon-vfpv4-24.10.8	openwrt arm a15;openwrt-a15	docker.io	linux	arm	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-arm-a9	OpenWrt 24.10.8 arm_cortex-a9_vfpv3-d16	openwrt	24.10.8	openwrt/rootfs:arm_cortex-a9_vfpv3-d16-24.10.8	openwrt arm a9;openwrt-a9	docker.io	linux	arm	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-armsr-armv7	OpenWrt 24.10.8 armsr-armv7	openwrt	24.10.8	openwrt/rootfs:armsr-armv7-24.10.8	openwrt armsr armv7;openwrt-armsr-armv7	docker.io	linux	arm	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-armsr-armv8	OpenWrt 24.10.8 armsr-armv8	openwrt	24.10.8	openwrt/rootfs:armsr-armv8-24.10.8	openwrt armsr armv8;openwrt-armsr-armv8	docker.io	linux	arm64	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-i386-pentium-mmx	OpenWrt 24.10.8 i386_pentium-mmx	openwrt	24.10.8	openwrt/rootfs:i386_pentium-mmx-24.10.8	openwrt i386 pentium mmx	docker.io	linux	386	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-i386-pentium4	OpenWrt 24.10.8 i386_pentium4	openwrt	24.10.8	openwrt/rootfs:i386_pentium4-24.10.8	openwrt i386 pentium4	docker.io	linux	386	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-malta-be	OpenWrt 24.10.8 malta-be	openwrt	24.10.8	openwrt/rootfs:malta-be-24.10.8	openwrt malta be	docker.io	linux	mips	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-mips-24kc	OpenWrt 24.10.8 mips_24kc	openwrt	24.10.8	openwrt/rootfs:mips_24kc-24.10.8	openwrt mips 24kc;openwrt-mips24kc	docker.io	linux	mips	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-mvebu-cortexa9	OpenWrt 24.10.8 mvebu-cortexa9	openwrt	24.10.8	openwrt/rootfs:mvebu-cortexa9-24.10.8	openwrt mvebu cortexa9	docker.io	linux	arm	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-x86-64-dash	OpenWrt 24.10.8 x86-64	openwrt	24.10.8	openwrt/rootfs:x86-64-24.10.8	openwrt x86-64	docker.io	linux	amd64	stable	false	true	yes	Verified published OpenWrt Docker rootfs tag
+openwrt-x86-generic	OpenWrt 24.10.8 x86-generic	openwrt	24.10.8	openwrt/rootfs:x86-generic-24.10.8	openwrt x86 generic	docker.io	linux	386	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-x86-geode	OpenWrt 24.10.8 x86-geode	openwrt	24.10.8	openwrt/rootfs:x86-geode-24.10.8	openwrt x86 geode	docker.io	linux	386	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-x86-legacy	OpenWrt 24.10.8 x86-legacy	openwrt	24.10.8	openwrt/rootfs:x86-legacy-24.10.8	openwrt x86 legacy	docker.io	linux	386	stable	false	true	conditional	Verified published OpenWrt Docker rootfs tag
+openwrt-x86-64	OpenWrt 24.10.8 x86_64	openwrt	24.10.8	openwrt/rootfs:x86_64-24.10.8	openwrt x86_64;openwrt-x86_64	docker.io	linux	amd64	stable	false	true	yes	Verified published OpenWrt Docker rootfs tag

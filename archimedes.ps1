@@ -22,6 +22,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$script:ArchimedesRoot = $PSScriptRoot
+$script:ArchimedesCatalogPath = Join-Path $PSScriptRoot 'catalog\distributions.tsv'
+foreach ($helper in @('Archimedes.Console.ps1','Archimedes.Catalog.ps1','Archimedes.Docker.ps1','Archimedes.Storage.ps1','Archimedes.Workflow.ps1')) {
+    $helperPath = Join-Path (Join-Path $PSScriptRoot 'lib') $helper
+    if (-not (Test-Path -LiteralPath $helperPath)) { throw "Required Archimedes helper missing: $helperPath" }
+    . $helperPath
+}
+
 function Write-Section {
     param([Parameter(Mandatory)][string]$Text)
     Write-Host ''
@@ -101,7 +109,7 @@ function Wait-DockerDaemon {
 
 function Start-DockerDesktopIfAvailable {
     param([Parameter(Mandatory)][int]$TimeoutSeconds)
-    if (-not $script:IsWindows) { return $false }
+    if (-not $script:ArchimedesIsWindows) { return $false }
 
     $previous = $ErrorActionPreference
     $desktopCliAvailable = $false
@@ -160,7 +168,7 @@ function Ensure-DockerDaemon {
     if (Test-DockerDaemon) { return }
     $context = Get-DockerContextName
 
-    if ($script:IsWindows -and -not $NoAutoStartDocker) {
+    if ($script:ArchimedesIsWindows -and -not $NoAutoStartDocker) {
         if (Start-DockerDesktopIfAvailable -TimeoutSeconds $DockerStartupTimeoutSeconds) {
             Write-Host "Docker daemon is ready (context: $(Get-DockerContextName))."
             return
@@ -168,7 +176,7 @@ function Ensure-DockerDaemon {
     }
 
     $details = Get-DockerDaemonDiagnostic
-    $hint = if ($script:IsWindows) {
+    $hint = if ($script:ArchimedesIsWindows) {
         if ($NoAutoStartDocker) {
             'Automatic Docker Desktop startup is disabled by -NoAutoStartDocker. Start Docker Desktop or another Docker Engine and retry.'
         } else {
@@ -238,6 +246,10 @@ function Resolve-DockerImageReference {
     param([Parameter(Mandatory)][string]$Value)
 
     $reference = $Value.Trim()
+    if (Test-Path -LiteralPath $script:ArchimedesCatalogPath) {
+        $catalogEntry = Resolve-ArchimedesCatalogAlias -Catalog @(Import-ArchimedesCatalog -Path $script:ArchimedesCatalogPath) -Value $reference
+        if ($catalogEntry) { return [string]$catalogEntry.Image }
+    }
     $compact = ($reference.ToLowerInvariant() -replace '\s+', '')
 
     switch -Regex ($compact) {
@@ -297,7 +309,7 @@ function New-DockerImageTar {
 }
 
 function Get-WSLNames {
-    if (-not $script:IsWindows) { return @() }
+    if (-not $script:ArchimedesIsWindows) { return @() }
     $names = & wsl.exe --list --quiet 2>$null
     if ($LASTEXITCODE -ne 0) { return @() }
     return @($names | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -326,39 +338,25 @@ function Export-WSLDistribution {
 }
 
 function Get-PresetImage {
-    $presets = [ordered]@{
-        '1'=@{Label='Debian 13';Image='debian:13'}
-        '2'=@{Label='Ubuntu 24.04 LTS';Image='ubuntu:24.04'}
-        '3'=@{Label='Ubuntu 26.04 LTS';Image='ubuntu:26.04'}
-        '4'=@{Label='Fedora 44';Image='fedora:44'}
-        '5'=@{Label='Alpine 3.22';Image='alpine:3.22'}
-        '6'=@{Label='Arch Linux';Image='archlinux:latest'}
-        '7'=@{Label='Rocky Linux 10';Image='rockylinux/rockylinux:10'}
-        '8'=@{Label='AlmaLinux 10';Image='almalinux:10'}
-        '9'=@{Label='Kali Rolling';Image='kalilinux/kali-rolling:latest'}
-        '10'=@{Label='openSUSE Tumbleweed';Image='opensuse/tumbleweed:latest'}
-        '11'=@{Label='Custom image reference';Image=$null}
-    }
-    Write-Host 'Available presets:'
-    foreach ($key in $presets.Keys) {
-        $entry = $presets[$key]
-        $imageText = if ($entry.Image) { " ($($entry.Image))" } else { '' }
-        Write-Host "  [$key] $($entry.Label)$imageText"
-    }
-    while ($true) {
-        $choice = Read-Host 'Select image'
-        if ($presets.Contains($choice)) {
-            if ($presets[$choice].Image) { return $presets[$choice].Image }
-            return (Read-Host 'Docker image reference (for example debian:13)').Trim()
-        }
-        Write-Warning "Invalid selection: $choice"
-    }
+    $catalog = @(Import-ArchimedesCatalog -Path $script:ArchimedesCatalogPath)
+    $items = @(Get-ArchimedesCatalogMenuItems -Catalog $catalog)
+    $selected = @(Invoke-ArchimedesSelectionMenu -Title 'Available Linux distribution repositories' -Items $items -IdProperty 'Id' -DisplayScript {
+        param($item)
+        "{0,-30} {1,-42} arch={2} WSL={3}" -f $item.DisplayName,$item.Image,$item.Architecture,$item.WslEligibility
+    } -PageSize 12)
+    if ($selected.Count -eq 0) { return (Read-Host 'Docker image reference').Trim() }
+    return [string]$selected[0].Image
 }
 
-$script:IsWindows = Test-IsWindows
+$script:ArchimedesIsWindows = Test-IsWindows
 Write-Host 'Archimedes - Docker image and RootFS export utility'
 Require-Command 'docker'
 Ensure-DockerDaemon
+
+if (-not $SourceMode -and -not $NonInteractive) {
+    Invoke-ArchimedesInteractiveWorkflow
+    return
+}
 
 if (-not $SourceMode) {
     if ($NonInteractive) { throw '-SourceMode is required with -NonInteractive.' }
@@ -428,7 +426,7 @@ if (-not $ExportMode) {
         '2'='Container RootFS archive (.tar) - flat filesystem; usable with docker import or WSL2 import'
         '3'='Both Docker image archive and RootFS archive'
     }
-    if ($script:IsWindows) {
+    if ($script:ArchimedesIsWindows) {
         $choices['4']='WSL2 distribution archive (.tar) - import RootFS then export with wsl --export'
         $choices['5']='All formats: Docker image + RootFS + WSL2 distribution archive'
     }
@@ -436,10 +434,10 @@ if (-not $ExportMode) {
     $ExportMode = @{'1'='image';'2'='rootfs';'3'='both';'4'='wsl';'5'='all'}[$choice]
 }
 
-if (($ExportMode -in @('wsl','all')) -and -not $script:IsWindows) {
+if (($ExportMode -in @('wsl','all')) -and -not $script:ArchimedesIsWindows) {
     throw "Export mode '$ExportMode' requires Windows with WSL2."
 }
-if ($ImportToWSL -and -not $script:IsWindows) {
+if ($ImportToWSL -and -not $script:ArchimedesIsWindows) {
     throw '-ImportToWSL is available only on Windows.'
 }
 
@@ -447,7 +445,7 @@ $needsImageTar = $ExportMode -in @('image','both','all')
 $needsRootFs = $ExportMode -in @('rootfs','both','wsl','all') -or $ImportToWSL
 $needsWSLExport = $ExportMode -in @('wsl','all')
 
-if ($script:IsWindows -and -not $NonInteractive -and -not $ImportToWSL -and -not $needsWSLExport) {
+if ($script:ArchimedesIsWindows -and -not $NonInteractive -and -not $ImportToWSL -and -not $needsWSLExport) {
     if (Read-YesNo 'Import the exported RootFS into WSL2 afterwards?' $false) {
         $ImportToWSL = $true
         $needsRootFs = $true
