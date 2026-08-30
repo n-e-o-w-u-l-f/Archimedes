@@ -182,7 +182,7 @@ function Write-ArchimedesRawMenuFull {
             Write-ArchimedesRawCellAtPosition $State $flat $StartTop $WindowWidth $DisplayScript
         }
     }
-    $help=' ↑ ↓ ← →  SPACE select  ENTER accept  ESC back  A all  N none  HOME/END  PgUp/PgDn  / filter'
+    $help=(' {0} {1} {2} {3}  SPACE select  ENTER accept  ESC back  A all  N none  HOME/END  PgUp/PgDn  / filter' -f ([char]0x2191),([char]0x2193),([char]0x2190),([char]0x2192))
     Write-ArchimedesAnsiBar -Row ($StartTop+2+$State.PageSize) -Width $WindowWidth -Text $help -Style $theme.Footer -Reset $theme.Reset
 }
 function Read-ArchimedesRawFilter {

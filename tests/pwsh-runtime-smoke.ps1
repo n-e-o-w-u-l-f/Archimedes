@@ -5,7 +5,8 @@ $temp=Join-Path ([IO.Path]::GetTempPath()) ('archimedes-pwsh-'+[guid]::NewGuid()
 $bin=Join-Path $temp 'bin'; $out=Join-Path $temp 'out'
 New-Item -ItemType Directory -Force $bin,$out|Out-Null
 try {
-    if($IsWindows){
+    $isWindowsRuntime = if ($PSVersionTable.PSEdition -eq 'Desktop') { $true } else { [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.InteropServices.OSPlatform]::Windows) }
+    if($isWindowsRuntime){
         $fake=Join-Path $bin 'docker.cmd'
         Set-Content $fake '@echo off
 if "%1"=="info" exit /b 0
